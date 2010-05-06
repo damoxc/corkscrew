@@ -43,7 +43,7 @@ def get_version():
     :rtype: string
 
     """
-    return pkg_resources.require("crumple")[0].version
+    return pkg_resources.require("corkscrew")[0].version
 
 def windows_check():
     """
