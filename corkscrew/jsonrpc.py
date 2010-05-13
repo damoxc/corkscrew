@@ -30,10 +30,14 @@ from corkscrew.common import json
 
 log = logging.getLogger(__name__)
 
+# predefine values so we can use lazy loading
+AUTH_LEVEL_DEFAULT = None
+AuthError = None
+
 def export(auth_level=AUTH_LEVEL_DEFAULT):
     """
     Decorator function to register an object's method as a RPC. The object
-    will need to be registered with a `:class:JSON` to be effective.
+    will need to be registered with a `:class:JsonRpc` to be effective.
 
     :param func: the function to export
     :type func: function
@@ -43,7 +47,7 @@ def export(auth_level=AUTH_LEVEL_DEFAULT):
     """
     global AUTH_LEVEL_DEFAULT, AuthError
     if AUTH_LEVEL_DEFAULT is None:
-        from pegasus.web.auth import AUTH_LEVEL_DEFAULT, AuthError
+        from corkscrew.auth import AUTH_LEVEL_DEFAULT, AuthError
 
     def wrap(func, *args, **kwargs):
         func._json_export = True
@@ -59,50 +63,12 @@ def export(auth_level=AUTH_LEVEL_DEFAULT):
 
 class JsonRpc(resource.Resource):
     """
-    A Twisted Web resource that exposes a JSON-RPC interface for web clients \
-    to use.
+    A Twisted Web resource that exposes a JSON-RPC interface for web clients to use.
     """
-
-    def __init__(self):
-        resource.Resource.__init__(self)
-        self._remote_methods = []
-        self._local_methods = {}
-
-    def connect(self, host="localhost", port=5925, username="", password=""):
-        """
-        Connects the client to a daemon
-        """
-        d = Deferred()
-        _d = client.connect(host, port, username, password)
-
-        def on_get_methods(methods):
-            """
-            Handles receiving the method names
-            """
-            self._remote_methods = methods
-            methods = list(self._remote_methods)
-            methods.extend(self._local_methods)
-            d.callback(methods)
-
-        def on_client_connected(connection_id):
-            """
-            Handles the client successfully connecting to the daemon and
-            invokes retrieving the method names.
-            """
-            d = client.daemon.get_method_list()
-            d.addCallback(on_get_methods)
-        _d.addCallback(on_client_connected)
-        return d
-
-    def disable(self):
-        client.disconnect()
-
-    def enable(self):
-        pass
-
-    def _on_client_disconnect(self, *args):
-        pass
-
+    
+    def __ini__(self):
+    	self._local_methods = {}
+    
     def _exec_local(self, method, params, request):
         """
         Handles executing all local methods.
@@ -207,14 +173,13 @@ class JsonRpc(resource.Resource):
         return ""
 
     def _send_response(self, request, response):
-        response = json.dumps(response)
         request.setHeader("content-type", "application/x-json")
-        request.write(compress(response, request))
+        request.write(compress(json.dumps(response), request))
         request.finish()
 
     def render(self, request):
         """
-        Handles all the POST requests made to the /json controller.
+        Handles all the POST requests made to the JsonRpc resource.
         """
 
         if request.method != "POST":
@@ -248,3 +213,52 @@ class JsonRpc(resource.Resource):
             if getattr(getattr(obj, d), '_json_export', False):
                 log.debug("Registering method: %s", name + "." + d)
                 self._local_methods[name + "." + d] = getattr(obj, d)
+
+class ConnectableJsonRpc(JsonRpc):
+    pass
+
+class JsonRpc(resource.Resource):
+    """
+    A Twisted Web resource that exposes a JSON-RPC interface for web clients \
+    to use.
+    """
+
+    def __init__(self):
+        resource.Resource.__init__(self)
+        self._remote_methods = []
+        self._local_methods = {}
+
+    def connect(self, host="localhost", port=5925, username="", password=""):
+        """
+        Connects the client to a daemon
+        """
+        d = Deferred()
+        _d = client.connect(host, port, username, password)
+
+        def on_get_methods(methods):
+            """
+            Handles receiving the method names
+            """
+            self._remote_methods = methods
+            methods = list(self._remote_methods)
+            methods.extend(self._local_methods)
+            d.callback(methods)
+
+        def on_client_connected(connection_id):
+            """
+            Handles the client successfully connecting to the daemon and
+            invokes retrieving the method names.
+            """
+            d = client.daemon.get_method_list()
+            d.addCallback(on_get_methods)
+        _d.addCallback(on_client_connected)
+        return d
+
+    def disable(self):
+        client.disconnect()
+
+    def enable(self):
+        pass
+
+    def _on_client_disconnect(self, *args):
+        pass
