@@ -329,6 +329,8 @@ class ExtJSTopLevel(TopLevelBase):
         self.putChild('icons', self.__icons)
         self.putChild('images', self.__images)
         self.putChild('themes', static.File(os.path.join(public, 'themes')))
+        self.putChild('charts.swf', static.File(os.path.join(public, 'charts.swf')))
+        self.putChild('expressinstall.swf', static.File(os.path.join(public, 'expressinstall.swf')))
         self.theme = 'blue'
         self.public = public
         self.templates = templates
