@@ -225,15 +225,17 @@ class StaticResources(resource.Resource):
 class TopLevelBase(resource.Resource):
 
     addSlash = True
-    auth = False
-    jsonrpc = None
+    auth     = False
+    jsonrpc  = None
+    json_cls = None
 
     def __init__(self, base=None, dev_mode=False):
         resource.Resource.__init__(self)
         self.dev_mode = dev_mode
         self.base = '' if base is None else base
         if self.jsonrpc:
-            self.putChild(self.jsonrpc, JsonRpc(self.auth))
+            json_cls = JsonRpc if self.json_cls is None else self.json_cls
+            self.putChild(self.jsonrpc, json_cls(self.auth))
 
     def getChild(self, path, request):
         if path == '':
