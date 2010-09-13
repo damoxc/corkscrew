@@ -169,7 +169,7 @@ class JsonRpc(resource.Resource):
         if isinstance(result, Deferred):
             result.addCallback(self.on_got_result, request, response)
             result.addErrback(self.on_err_result, request, response)
-            return d
+            return result
         else:
             response['result'] = result
             return self.send_response(request, response)
