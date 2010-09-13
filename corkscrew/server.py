@@ -214,9 +214,14 @@ class StaticResources(resource.Resource):
 
                 filepath = filemap[urlpath]
                 if isinstance(filepath, tuple):
-                    filepath = filepath[0]
+                    dirpath = filepath[0]
+                    filepath = request.lookup_path[len(urlpath):]
+                    if filepath[0] == '/':
+                        filepath = filepath[1:]
+                    path = os.path.join(dirpath, filepath)
+                else:
+                    path = filepath + request.lookup_path[len(urlpath):]
 
-                path = os.path.join(filepath, request.lookup_path[len(urlpath):])
                 if not os.path.isfile(path):
                     continue
 
@@ -315,8 +320,6 @@ class ExtJSTopLevel(TopLevelBase):
         self.__icons = StaticResources('icons')
         self.__images = StaticResources('images', '*.jpg', '*.png', '*.gif')
         self.__images.add_folder('', os.path.join(public, 'images'))
-
-        print self.__images.get_resources()
 
         js = StaticResources('js')
         js.add_file('ext-base-debug.js', os.path.join(public, 'js', 'ext-base-debug.js'), 'dev')
