@@ -33,7 +33,6 @@ class AuthError(Exception):
     An exception that might be raised when checking a request for
     authentication.
     """
-    pass
 
 import time
 import random
@@ -45,8 +44,7 @@ from email.utils import formatdate
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 
-from pegasus import component
-from pegasus.web.json_api import JSONComponent, export
+from corkscrew.jsonrpc import export
 
 log = logging.getLogger(__name__)
 
@@ -77,30 +75,31 @@ def make_expires(timeout):
     expires_str = formatdate(timeval=expires, localtime=False, usegmt=True)
     return expires, expires_str
 
-class Auth(JSONComponent):
+class Auth(object):
     """
     The component that implements authentification into the JSON interface.
     """
     
     def __init__(self):
-        super(Auth, self).__init__("Auth")
+        self.config = {
+            'sessions': {}
+        }
         self.worker = LoopingCall(self._clean_sessions)
         self.worker.start(5)
     
     def _clean_sessions(self):
-        config = component.get('PegasusWebServer').config
-        session_ids = config["sessions"].keys()
+        session_ids = self.config['sessions'].keys()
         
         now = time.gmtime()
         for session_id in session_ids:
-            session = config["sessions"][session_id]
+            session = self.config['sessions'][session_id]
             
-            if "expires" not in session:
-                del config["sessions"][session_id]
+            if 'expires' not in session:
+                del self.config['sessions'][session_id]
                 continue
                 
-            if time.gmtime(session["expires"]) < now:
-                del config["sessions"][session_id]
+            if time.gmtime(session['expires']) < now:
+                del self.config['sessions'][session_id]
                 continue
     
     def _create_session(self, request, login='admin'):
@@ -118,80 +117,32 @@ class Auth(JSONComponent):
         m.update(m.hexdigest())
         session_id = m.hexdigest()
 
-        config = component.get('PegasusWebServer').config
-        
-        expires, expires_str = make_expires(config["session_timeout"])
+        expires, expires_str = make_expires(self.config['session_timeout'])
         checksum = str(make_checksum(session_id))
         
         request.addCookie('_session_id', session_id + checksum,
                 path="/json", expires=expires_str)
         
         log.debug("Creating session for %s", login)
-        config = component.get('PegasusWebServer').config
 
-        if type(config["sessions"]) is list:
-            config["sessions"] = {}
+        if type(self.config['sessions']) is list:
+            self.config['sessions'] = {}
 
-        config["sessions"][session_id] = {
-            "login": login,
-            "level": AUTH_LEVEL_ADMIN,
-            "expires": expires
+        self.config['sessions'][session_id] = {
+            'login': login,
+            'level': AUTH_LEVEL_ADMIN,
+            'expires': expires
         }
         return True
     
     def check_password(self, password):
-        config = component.get('PegasusWebServer').config
-        if "pwd_md5" in config:
-            # We are using the 1.2-dev auth method
-            log.debug("Received a password via the 1.2-dev auth method")
-            m = hashlib.md5()
-            m.update(config["pwd_salt"])
-            m.update(password)
-            if m.hexdigest() == config['pwd_md5']:
-                # We want to move the password over to sha1 and remove
-                # the old passwords from the config file.
-                self._change_password(password)
-                del config["pwd_md5"]
-                
-                # Remove the older password if there is now.
-                if "old_pwd_md5" in config:
-                    del config["old_pwd_salt"]
-                    del config["old_pwd_md5"]
-                
-                return True
-        
-        elif "old_pwd_md5" in config:
-            # We are using the 1.1 webui auth method
-            log.debug("Received a password via the 1.1 auth method")
-            from base64 import decodestring
-            m = hashlib.md5()
-            m.update(decodestring(config["old_pwd_salt"]))
-            m.update(password)
-            if m.digest() == decodestring(config["old_pwd_md5"]):
-                
-                # We want to move the password over to sha1 and remove
-                # the old passwords from the config file.
-                self._change_password(password)
-                del config["old_pwd_salt"]
-                del config["old_pwd_md5"]
-                
-                return True
+        log.debug("Received a password auth request")
+        s = hashlib.sha1()
+        s.update(self.config["pwd_salt"])
+        s.update(password)
+        if s.hexdigest() == self.config["pwd_sha1"]:
+            return True
 
-        elif "pwd_sha1" in config:
-            # We are using the 1.2 auth method
-            log.debug("Received a password via the 1.2 auth method")
-            s = hashlib.sha1()
-            s.update(config["pwd_salt"])
-            s.update(password)
-            if s.hexdigest() == config["pwd_sha1"]:
-                return True
-
-        else:
-            # Can't detect which method we should be using so just deny
-            # access.
-            log.debug("Failed to detect the login method")
-            return False
-    
     def check_request(self, request, method=None, level=None):
         """
         Check to ensure that a request is authorised to call the specified
@@ -207,16 +158,16 @@ class Auth(JSONComponent):
         :raises: Exception
         """
 
-        config = component.get('PegasusWebServer').config
         session_id = get_session_id(request.getCookie("_session_id"))
         
-        if session_id not in config["sessions"]:
+        if session_id not in self.config["sessions"]:
             auth_level = AUTH_LEVEL_NONE
             session_id = None
         else:
-            session = config["sessions"][session_id]
+            session = self.config["sessions"][session_id]
             auth_level = session["level"]
-            expires, expires_str = make_expires(config["session_timeout"])
+            expires, expires_str = make_expires(
+                self.config["session_timeout"])
             session["expires"] = expires
 
             _session_id = request.getCookie("_session_id")
@@ -254,9 +205,8 @@ class Auth(JSONComponent):
         salt = hashlib.sha1(str(random.getrandbits(40))).hexdigest()
         s = hashlib.sha1(salt)
         s.update(new_password)
-        config = component.get('PegasusWebServer').config
-        config["pwd_salt"] = salt
-        config["pwd_sha1"] = s.hexdigest()
+        self.config["pwd_salt"] = salt
+        self.config["pwd_sha1"] = s.hexdigest()
         return True
     
     @export
@@ -292,8 +242,7 @@ class Auth(JSONComponent):
         :type session_id: string
         """
         d = Deferred()
-        config = component.get('PegasusWebServer').config
-        del config["sessions"][__request__.session_id]
+        del self.config["sessions"][__request__.session_id]
         return True
     
     @export(AUTH_LEVEL_NONE)

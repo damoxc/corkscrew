@@ -26,10 +26,6 @@ from types import FunctionType
 from twisted.internet.defer import Deferred, DeferredList
 from twisted.web import http, resource, server
 
-from corkscrew.common import json, compress
-
-log = logging.getLogger(__name__)
-
 # predefine values so we can use lazy loading
 AUTH_LEVEL_DEFAULT = None
 AuthError = None
@@ -60,6 +56,11 @@ def export(auth_level=AUTH_LEVEL_DEFAULT):
         return wrap(func)
     else:
         return wrap
+
+from corkscrew.auth import Auth
+from corkscrew.common import json, compress
+
+log = logging.getLogger(__name__)
 
 class JsonRpc(resource.Resource):
     """
@@ -215,7 +216,11 @@ class JsonRpc(resource.Resource):
     def __init__(self, auth=False):
         resource.Resource.__init__(self)
         self._local_methods = {}
-        self.auth = auth
+        if auth:
+            self.auth = Auth()
+            self.register_object(self.auth)
+        else:
+            self.auth = None
 
     def _exec_local(self, method, params, request):
         """
@@ -229,7 +234,7 @@ class JsonRpc(resource.Resource):
             meth = self._local_methods[method]
             meth.func_globals['__request__'] = request
             if self.auth:
-                component.get("Auth").check_request(request, meth)
+                self.auth.check_request(request, meth)
             return meth(*params)
         raise JSONException("Unknown method")
 

@@ -233,9 +233,12 @@ class TopLevelBase(resource.Resource):
         resource.Resource.__init__(self)
         self.dev_mode = dev_mode
         self.base = '' if base is None else base
+
+        # Add a JSON resource if required
         if self.jsonrpc:
             json_cls = JsonRpc if self.json_cls is None else self.json_cls
-            self.putChild(self.jsonrpc, json_cls(self.auth))
+            self.json = json_cls(self.auth)
+            self.putChild(self.jsonrpc, self.json)
 
     def getChild(self, path, request):
         if path == '':
