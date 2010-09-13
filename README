@@ -1,0 +1,14 @@
+Corkscrew
+=========
+
+Corkscrew is a webserver aimed at making it very easy to get a ExtJS
+application up and running with a Python backend.
+
+Authors
+-------
+
+ * Damien Churchill <damoxc@gmail.com>
+
+License
+-------
+Corkscrew is licensed under the GNU GPLv3 license.
