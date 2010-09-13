@@ -45,7 +45,7 @@ class GetText(resource.Resource):
 
 class StaticResources(resource.Resource):
 
-    def __init__(self, prefix=''):
+    def __init__(self, prefix='', *extensions):
         resource.Resource.__init__(self)
         self.__resources = {
             'normal': {
@@ -62,6 +62,10 @@ class StaticResources(resource.Resource):
             }
         }
         self.__prefix = prefix
+        if extensions:
+            self.__extensions = extensions
+        else:
+            self.__extensions = ('*.js',)
 
     def _get_script_dicts(self, type):
         """
@@ -84,7 +88,9 @@ class StaticResources(resource.Resource):
         :param dirpath: The physical directory the files are in
         :type dirpath: string
         """
-        files = fnmatch.filter(os.listdir(dirpath), "*.js")
+        files = []
+        for extension in self.__extensions:
+            files += fnmatch.filter(os.listdir(dirpath), extension)
         files.sort()
         dirpath = dirpath[len(base) + 1:]
         if dirpath:
@@ -180,7 +186,7 @@ class StaticResources(resource.Resource):
                         myfiles.extend(self._get_files(dirpath, urlpath, filepath))
                         self._adjust_order(dirpath, urlpath, myfiles)
                 else:
-                    myfiles = self._get_files(filepath, urlpath, None)
+                    myfiles = self._get_files(filepath, urlpath, '')
                     self._adjust_order(filepath, urlpath, myfiles)
 
                 files.extend(myfiles)
@@ -210,7 +216,7 @@ class StaticResources(resource.Resource):
                 if isinstance(filepath, tuple):
                     filepath = filepath[0]
 
-                path = filepath + request.lookup_path[len(urlpath):]
+                path = os.path.join(filepath, request.lookup_path[len(urlpath):])
                 if not os.path.isfile(path):
                     continue
 
@@ -307,7 +313,10 @@ class ExtJSTopLevel(TopLevelBase):
         self.__css = css
 
         self.__icons = StaticResources('icons')
-        self.__images = StaticResources('images')
+        self.__images = StaticResources('images', '*.jpg', '*.png', '*.gif')
+        self.__images.add_folder('', os.path.join(public, 'images'))
+
+        print self.__images.get_resources()
 
         js = StaticResources('js')
         js.add_file('ext-base-debug.js', os.path.join(public, 'js', 'ext-base-debug.js'), 'dev')
