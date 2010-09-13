@@ -28,12 +28,6 @@ AUTH_LEVEL_ADMIN = 10
 
 AUTH_LEVEL_DEFAULT = AUTH_LEVEL_NORMAL
 
-class AuthError(Exception):
-    """
-    An exception that might be raised when checking a request for
-    authentication.
-    """
-
 import time
 import random
 import hashlib
@@ -82,7 +76,8 @@ class Auth(object):
     
     def __init__(self):
         self.config = {
-            'sessions': {}
+            'sessions': {},
+            'session_timeout': 3600
         }
         self.worker = LoopingCall(self._clean_sessions)
         self.worker.start(5)
