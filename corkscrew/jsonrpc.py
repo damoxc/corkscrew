@@ -79,7 +79,7 @@ class JsonRpc(resource.Resource):
             self.auth = None
 
     def get_methods(self):
-        return list(self.methods)
+        return self.methods.keys()
 
     def exec_method(self, method, params, request):
         """
