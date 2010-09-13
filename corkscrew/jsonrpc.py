@@ -26,7 +26,7 @@ from types import FunctionType
 from twisted.internet.defer import Deferred, DeferredList
 from twisted.web import http, resource, server
 
-from corkscrew.common import json
+from corkscrew.common import json, compress
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class JsonRpc(resource.Resource):
     A Twisted Web resource that exposes a JSON-RPC interface for web clients to use.
     """
     
-    def __ini__(self):
+    def __init__(self, auth=False):
     	self._local_methods = {}
     
     def _exec_local(self, method, params, request):
@@ -87,14 +87,6 @@ class JsonRpc(resource.Resource):
             component.get("Auth").check_request(request, meth)
             return meth(*params)
         raise JSONException("Unknown system method")
-
-    def _exec_remote(self, method, params, request):
-        """
-        Executes methods using the Deluge client.
-        """
-        component.get("Auth").check_request(request, level=AUTH_LEVEL_DEFAULT)
-        core_component, method = method.split(".")
-        return getattr(getattr(client, core_component), method)(*params)
 
     def _handle_request(self, request):
         """
@@ -214,51 +206,136 @@ class JsonRpc(resource.Resource):
                 log.debug("Registering method: %s", name + "." + d)
                 self._local_methods[name + "." + d] = getattr(obj, d)
 
-class ConnectableJsonRpc(JsonRpc):
-    pass
-
 class JsonRpc(resource.Resource):
     """
     A Twisted Web resource that exposes a JSON-RPC interface for web clients \
     to use.
     """
 
-    def __init__(self):
+    def __init__(self, auth=False):
         resource.Resource.__init__(self)
-        self._remote_methods = []
         self._local_methods = {}
+        self.auth = auth
 
-    def connect(self, host="localhost", port=5925, username="", password=""):
+    def _exec_local(self, method, params, request):
         """
-        Connects the client to a daemon
+        Handles executing all local methods.
         """
-        d = Deferred()
-        _d = client.connect(host, port, username, password)
+        if method == "system.listMethods":
+            return list(self._local_methods)
+        elif method in self._local_methods:
+            # This will eventually process methods that the server adds
+            # and any plugins.
+            meth = self._local_methods[method]
+            meth.func_globals['__request__'] = request
+            if self.auth:
+                component.get("Auth").check_request(request, meth)
+            return meth(*params)
+        raise JSONException("Unknown method")
 
-        def on_get_methods(methods):
-            """
-            Handles receiving the method names
-            """
-            self._remote_methods = methods
-            methods = list(self._remote_methods)
-            methods.extend(self._local_methods)
-            d.callback(methods)
+    def _handle_request(self, request):
+        """
+        Takes some json data as a string and attempts to decode it, and process
+        the rpc object that should be contained, returning a deferred for all
+        procedure calls and the request id.
+        """
+        try:
+            request.json = json.loads(request.json)
+        except ValueError:
+            raise JSONException("JSON not decodable")
+        
+        if "method" not in request.json or "id" not in request.json or \
+           "params" not in request.json:
+            raise JSONException("Invalid JSON request")
 
-        def on_client_connected(connection_id):
-            """
-            Handles the client successfully connecting to the daemon and
-            invokes retrieving the method names.
-            """
-            d = client.daemon.get_method_list()
-            d.addCallback(on_get_methods)
-        _d.addCallback(on_client_connected)
-        return d
+        method, params = request.json["method"], request.json["params"]
+        request_id = request.json["id"]
+        result = None
+        error = None
 
-    def disable(self):
-        client.disconnect()
+        try:
+            if method.startswith("system.") or method in self._local_methods:
+                result = self._exec_local(method, params, request)
+            elif method in self._remote_methods:
+                result = self._exec_remote(method, params, request)
+            else:
+                error = {"message": "Unknown method", "code": 2}
+        except AuthError, e:
+            error = {"message": "Not authenticated", "code": 1}
+        except Exception, e:
+            log.error("Error calling method `%s`", method)
+            log.exception(e)
 
-    def enable(self):
-        pass
+            error = {"message": e.message, "code": 3}
 
-    def _on_client_disconnect(self, *args):
-        pass
+        return request_id, result, error
+
+    def _on_json_request(self, request):
+        """
+        Handler to take the json data as a string and pass it on to the
+        _handle_request method for further processing.
+        """
+        log.debug("json-request: %s", request.json)
+        response = {"result": None, "error": None, "id": None}
+        response["id"], d, response["error"] = self._handle_request(request)
+
+        if isinstance(d, Deferred):
+            d.addCallback(self._on_rpc_request_finished, response, request)
+            d.addErrback(self._on_rpc_request_failed, response, request)
+            return d
+        else:
+            response["result"] = d
+            return self._send_response(request, response)
+
+    def _on_json_request_failed(self, reason, request):
+        """
+        Errback handler to return a HTTP code of 500.
+        """
+        log.exception(reason)
+        request.setResponseCode(http.INTERNAL_SERVER_ERROR)
+        return ""
+
+    def _send_response(self, request, response):
+        request.setHeader("content-type", "application/x-json")
+        request.write(compress(json.dumps(response), request))
+        request.finish()
+
+    def render(self, request):
+        """
+        Handles all the POST requests made to the JsonRpc resource.
+        """
+
+        if request.method != "POST":
+            request.setResponseCode(http.NOT_ALLOWED)
+            return ""
+
+        try:
+            request.content.seek(0)
+            request.json = request.content.read()
+            d = self._on_json_request(request)
+            return server.NOT_DONE_YET
+        except Exception, e:
+            return self._on_json_request_failed(e, request)
+
+    def register_object(self, obj, name=None):
+        """
+        Registers an object to export it's rpc methods.  These methods should
+        be exported with the export decorator prior to registering the object.
+
+        :param obj: the object that we want to export
+        :type obj: object
+        :param name: the name to use, if None, it will be the class name of the object
+        :type name: string
+        """
+        name = name or obj.__class__.__name__
+        name = name.lower()
+
+        for d in dir(obj):
+            if d[0] == "_":
+                continue
+            if getattr(getattr(obj, d), '_json_export', False):
+                log.debug("Registering method: %s", name + "." + d)
+                self._local_methods[name + "." + d] = getattr(obj, d)
+
+class ConnectableJsonRpc(JsonRpc):
+    pass
