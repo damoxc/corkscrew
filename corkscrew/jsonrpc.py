@@ -150,6 +150,9 @@ class JsonRpc(resource.Resource):
             'id':     None
         }
 
+        # Declare result incase we hit an error
+        result = None
+
         # Pass the JSON-RPC request off to be handled
         try:
             result = self.handle_request(request)
