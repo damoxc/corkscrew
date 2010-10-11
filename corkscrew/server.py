@@ -317,7 +317,8 @@ class ExtJSTopLevel(TopLevelBase):
         self.putChild('css', css)
         self.__css = css
 
-        self.__icons = StaticResources('icons')
+        self.__icons = StaticResources('icons', '*.jpg', '*.png', '*.gif')
+        self.__icons.add_folder('', os.path.join(public, 'icons'))
         self.__images = StaticResources('images', '*.jpg', '*.png', '*.gif')
         self.__images.add_folder('', os.path.join(public, 'images'))
 
