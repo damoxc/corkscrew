@@ -197,6 +197,14 @@ class JsonRpc(resource.Resource):
         return ""
 
     def send_response(self, request, response):
+        """
+        Handles sending the response dictionary back to the client.
+
+        :param request: The original request object
+        :type request: Request
+        :param response: The response dictionary
+        :type response: dict
+        """
         request.setHeader("content-type", "application/x-json")
         request.write(compress(json.dumps(response), request))
         request.finish()
