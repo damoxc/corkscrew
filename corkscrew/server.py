@@ -237,13 +237,15 @@ class TopLevelBase(resource.Resource):
 
     addSlash = True
     auth     = False
+    base     = None
+    dev_mode = False
     jsonrpc  = None
     json_cls = None
 
-    def __init__(self, base=None, dev_mode=False):
+    def __init__(self):
         resource.Resource.__init__(self)
-        self.dev_mode = dev_mode
-        self.base = '' if base is None else base
+        self.dev_mode = self.dev_mode or False
+        self.base = self.base if self.base else ''
 
         # Add a JSON resource if required
         if self.jsonrpc:
@@ -297,6 +299,10 @@ class TopLevelBase(resource.Resource):
 
 class ExtJSTopLevel(TopLevelBase):
 
+    gettext   = None
+    public    = ''
+    templates = ''
+
     @property
     def css(self):
         return self.__css
@@ -305,48 +311,46 @@ class ExtJSTopLevel(TopLevelBase):
     def js(self):
         return self.__js
 
-    def __init__(self, public, templates, base=None, dev_mode=False, gettext=None):
-        TopLevelBase.__init__(self, base, dev_mode)
+    def __init__(self):
+        TopLevelBase.__init__(self)
         css = StaticResources('css')
-        css.add_file('ext-all-notheme.css', os.path.join(public, 'css', 'ext-all-notheme.css'), 'dev')
-        css.add_folder('ext-extensions', os.path.join(public, 'css', 'ext-extensions'), 'dev')
-        css.add_file('ext-all-notheme.css', os.path.join(public, 'css', 'ext-all-notheme.css'), 'debug')
-        css.add_file('ext-extensions-debug.css', os.path.join(public, 'css', 'ext-extensions-debug.css'), 'debug')
-        css.add_file('ext-all-notheme.css', os.path.join(public, 'css', 'ext-all-notheme.css'))
-        css.add_file('ext-extensions.css', os.path.join(public, 'css', 'ext-extensions.css'))
+        css.add_file('ext-all-notheme.css', os.path.join(self.public, 'css', 'ext-all-notheme.css'), 'dev')
+        css.add_folder('ext-extensions', os.path.join(self.public, 'css', 'ext-extensions'), 'dev')
+        css.add_file('ext-all-notheme.css', os.path.join(self.public, 'css', 'ext-all-notheme.css'), 'debug')
+        css.add_file('ext-extensions-debug.css', os.path.join(self.public, 'css', 'ext-extensions-debug.css'), 'debug')
+        css.add_file('ext-all-notheme.css', os.path.join(self.public, 'css', 'ext-all-notheme.css'))
+        css.add_file('ext-extensions.css', os.path.join(self.public, 'css', 'ext-extensions.css'))
         self.putChild('css', css)
         self.__css = css
 
         self.__icons = StaticResources('icons', '*.jpg', '*.png', '*.gif')
-        self.__icons.add_folder('', os.path.join(public, 'icons'))
+        self.__icons.add_folder('', os.path.join(self.public, 'icons'))
         self.__images = StaticResources('images', '*.jpg', '*.png', '*.gif')
-        self.__images.add_folder('', os.path.join(public, 'images'))
+        self.__images.add_folder('', os.path.join(self.public, 'images'))
 
         js = StaticResources('js')
-        js.add_file('ext-base-debug.js', os.path.join(public, 'js', 'ext-base-debug.js'), 'dev')
-        js.add_file('ext-all-debug.js', os.path.join(public, 'js', 'ext-all-debug.js'), 'dev')
-        js.add_folder('ext-extensions', os.path.join(public, 'js', 'ext-extensions'), 'dev')
+        js.add_file('ext-base-debug.js', os.path.join(self.public, 'js', 'ext-base-debug.js'), 'dev')
+        js.add_file('ext-all-debug.js', os.path.join(self.public, 'js', 'ext-all-debug.js'), 'dev')
+        js.add_folder('ext-extensions', os.path.join(self.public, 'js', 'ext-extensions'), 'dev')
 
-        js.add_file('ext-base-debug.js', os.path.join(public, 'js', 'ext-base-debug.js'), 'debug')
-        js.add_file('ext-all-debug.js', os.path.join(public, 'js', 'ext-all-debug.js'), 'debug')
-        js.add_file('ext-extensions-debug.js', os.path.join(public, 'js', 'ext-extensions-debug.js'), 'debug')
+        js.add_file('ext-base-debug.js', os.path.join(self.public, 'js', 'ext-base-debug.js'), 'debug')
+        js.add_file('ext-all-debug.js', os.path.join(self.public, 'js', 'ext-all-debug.js'), 'debug')
+        js.add_file('ext-extensions-debug.js', os.path.join(self.public, 'js', 'ext-extensions-debug.js'), 'debug')
 
-        js.add_file('ext-base.js', os.path.join(public, 'js', 'ext-base.js'))
-        js.add_file('ext-all.js', os.path.join(public, 'js', 'ext-all.js'))
-        js.add_file('ext-extensions.js', os.path.join(public, 'js', 'ext-extensions.js'))
+        js.add_file('ext-base.js', os.path.join(self.public, 'js', 'ext-base.js'))
+        js.add_file('ext-all.js', os.path.join(self.public, 'js', 'ext-all.js'))
+        js.add_file('ext-extensions.js', os.path.join(self.public, 'js', 'ext-extensions.js'))
         self.putChild('js', js)
         self.__js = js
 
-        if gettext:
-            self.putChild('gettext.js', GetText(gettext))
+        if self.gettext:
+            self.putChild('gettext.js', GetText(self.gettext))
         self.putChild('icons', self.__icons)
         self.putChild('images', self.__images)
-        self.putChild('themes', static.File(os.path.join(public, 'themes')))
-        self.putChild('charts.swf', static.File(os.path.join(public, 'charts.swf')))
-        self.putChild('expressinstall.swf', static.File(os.path.join(public, 'expressinstall.swf')))
+        self.putChild('themes', static.File(os.path.join(self.public, 'themes')))
+        self.putChild('charts.swf', static.File(os.path.join(self.public, 'charts.swf')))
+        self.putChild('expressinstall.swf', static.File(os.path.join(self.public, 'expressinstall.swf')))
         self.theme = 'blue'
-        self.public = public
-        self.templates = templates
 
     def render(self, request):
         mode = self.get_request_mode(request)
