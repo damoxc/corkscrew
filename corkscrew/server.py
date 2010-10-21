@@ -285,17 +285,16 @@ class TopLevelBase(resource.Resource):
         :returns: The servers mode
         :rtype: string or NoneType
         """
-        if 'dev' in request.args and ('true', 'yes', '1') in request.args.get('dev')[-1]:
+        if 'dev' in request.args and request.args.get('dev')[-1] in ('true', 'yes', '1'): 
             return 'dev'
 
         if self.dev_mode:
             return 'dev'
 
-        if 'debug' in request.args and ('true', 'yes', '1') in request.args.get('debug')[-1]:
+        if 'debug' in request.args and request.args.get('debug')[-1] in ('true', 'yes', '1'):
             return 'debug'
 
         return None
-
 
 class ExtJSTopLevel(TopLevelBase):
 
