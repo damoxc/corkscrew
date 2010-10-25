@@ -25,6 +25,8 @@ import os
 import sys
 import time
 import zlib
+import random
+import hashlib
 import platform
 import subprocess
 import pkg_resources
@@ -36,25 +38,22 @@ try:
 except ImportError:
     import simplejson as json
 
-def get_version():
+def compress(contents, request=None):
     """
-    Returns the program version from the egg metadata
+    GZip compress the contents, optionally setting the content-encoding
+    on a request if passed in as well.
 
-    :returns: the version of Deluge
-    :rtype: string
-
+    :param contents: The contents to compress
+    :type contents: str
+    :keyword request: The request object
+    :type request: twisted.web.http.Request
     """
-    return pkg_resources.require("corkscrew")[0].version
-
-def windows_check():
-    """
-    Checks if the current platform is Windows
-
-    :returns: True or False
-    :rtype: bool
-
-    """
-    return platform.system() in ('Windows', 'Microsoft')
+    if request:
+        request.setHeader('content-encoding', 'gzip')
+    compress = zlib.compressobj(6, zlib.DEFLATED, zlib.MAX_WBITS + 16,
+        zlib.DEF_MEM_LEVEL,0)
+    contents = compress.compress(contents)
+    return contents + compress.flush()
 
 def escape(text):
     """
@@ -67,12 +66,30 @@ def escape(text):
     text = text.replace('\n', '\\n')
     return text
 
-def compress(contents, request):
-    request.setHeader('content-encoding', 'gzip')
-    compress = zlib.compressobj(6, zlib.DEFLATED, zlib.MAX_WBITS + 16,
-        zlib.DEF_MEM_LEVEL,0)
-    contents = compress.compress(contents)
-    return contents + compress.flush()
+def get_version():
+    """
+    Returns the program version from the egg metadata
+
+    :returns: the version of Deluge
+    :rtype: string
+    """
+    return pkg_resources.require("corkscrew")[0].version
+
+def make_uid():
+    """
+    Create a unique identifier
+    """
+    return hashlib.md5('%s_%s' % (random.random(), random.random())).hexdigest()
+
+def windows_check():
+    """
+    Checks if the current platform is Windows
+
+    :returns: True or False
+    :rtype: bool
+
+    """
+    return platform.system() in ('Windows', 'Microsoft')
 
 class Template(MakoTemplate):
     """
