@@ -227,6 +227,7 @@ class StaticResources(resource.Resource):
 
                 log.debug('serving path: %s', path)
                 mime_type = mimetypes.guess_type(path)
+                log.debug('setting mime-type to: %s', mime_type[0])
                 request.setHeader('content-type', mime_type[0])
                 return compress(open(path, 'rb').read(), request)
         
