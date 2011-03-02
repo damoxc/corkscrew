@@ -342,8 +342,10 @@ class ExtJSTopLevel(TopLevelBase):
         self.putChild('js', js)
         self.__js = js
 
-        if self.gettext:
-            self.putChild('gettext.js', GetText(self.gettext))
+        gettext = os.path.join(self.templates, 'gettext.js')
+        if os.path.exists(gettext):
+            self.putChild('gettext.js', GetText(gettext))
+
         self.putChild('icons', self.__icons)
         self.putChild('images', self.__images)
         self.putChild('themes', static.File(os.path.join(self.public, 'themes')))
