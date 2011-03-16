@@ -38,6 +38,7 @@ from email.utils import formatdate
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 
+from corkscrew.errors import AuthError
 from corkscrew.jsonrpc import export
 
 log = logging.getLogger(__name__)
